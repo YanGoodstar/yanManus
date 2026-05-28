@@ -12,5 +12,14 @@ spring:
       chat:
         options:
           model: qwen-plus
+    mcp:
+      client:
+        sse:
+          connections:
+            stdio: true
+            servers-configuration: classpath:mcp-servers.json
+
+serpapi:
+  api-key: ${SERPAPI_API_KEY:}
 
 

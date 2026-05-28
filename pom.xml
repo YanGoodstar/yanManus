@@ -62,6 +62,13 @@
             <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
             <version>1.1.2.0</version>
         </dependency>
+        <!-- mcp客户端开发 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-mcp-client</artifactId>
+            <version>1.1.6</version>
+            <scope>compile</scope>
+        </dependency>
     </dependencies>
 
     <build>
