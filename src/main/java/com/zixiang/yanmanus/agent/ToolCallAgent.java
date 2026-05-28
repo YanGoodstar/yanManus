@@ -110,6 +110,7 @@ public class ToolCallAgent extends ReActAgent{
         ToolExecutionResult toolExecutionResult = toolCallingManager.executeToolCalls(prompt, toolCallChatResponse);
         //记录消息上下文 调用工具之后 conversationHistory包含了助手消息和调用工具信息
         setMessageList(toolExecutionResult.conversationHistory());
+
         ToolResponseMessage toolResponseMessage = (ToolResponseMessage) CollUtil.getLast(toolExecutionResult.conversationHistory());
         String results = toolResponseMessage.getResponses().stream()
                 .map(toolResponse -> String.format("工具：%s 完成了任务！结果是：%s", toolResponse.name(), toolResponse.responseData()))
@@ -117,7 +118,7 @@ public class ToolCallAgent extends ReActAgent{
 
         //判断是否执行了终止工具
         boolean terminateCalled = toolResponseMessage.getResponses().stream()
-                .anyMatch(toolResponse -> toolResponse.name().equals("TerminateTool"));
+                .anyMatch(toolResponse -> toolResponse.name().equals("doTerminate"));
         if (terminateCalled){
             setState(AgentState.FINISHED);
         }
