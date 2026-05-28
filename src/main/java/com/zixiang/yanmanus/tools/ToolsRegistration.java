@@ -15,6 +15,9 @@ public class ToolsRegistration {
     @Bean
     public ToolCallback[] getToolCallbacks() {
         TerminateTool terminateTool = new TerminateTool();
-        return ToolCallbacks.from(terminateTool);
+        FileReadTool fileReadTool = new FileReadTool();
+        FileWriteTool fileWriteTool = new FileWriteTool();
+        BashTool bashTool = new BashTool();
+        return ToolCallbacks.from(terminateTool, fileReadTool, fileWriteTool, bashTool);
     }
 }
