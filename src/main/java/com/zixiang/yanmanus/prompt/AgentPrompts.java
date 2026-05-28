@@ -13,8 +13,6 @@ public class AgentPrompts {
         Your capabilities include:
         {capabilities}
 
-        The current workspace directory is: {workspace}
-
         Rules:
         1. Select the most appropriate tool proactively
         2. For complex tasks, break down into steps
