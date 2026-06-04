@@ -30,8 +30,9 @@ public class ToolsRegistration {
         FileWriteTool fileWriteTool = new FileWriteTool();
         BashTool bashTool = new BashTool();
         WebSearchTool webSearchTool = new WebSearchTool(serpApiKey);
+        AskUserTool askUserTool = new AskUserTool();
 
-        List<ToolCallback> allTools = new ArrayList<>(List.of(ToolCallbacks.from(terminateTool, fileReadTool, fileWriteTool, bashTool, webSearchTool)));
+        List<ToolCallback> allTools = new ArrayList<>(List.of(ToolCallbacks.from(terminateTool, fileReadTool, fileWriteTool, bashTool, webSearchTool, askUserTool)));
 
         // MCP 工具（地图等）
         ToolCallback[] mcpTools = mcpToolCallbacks.getToolCallbacks();

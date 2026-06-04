@@ -38,6 +38,7 @@ public abstract class BaseAgent {
      * @param userPrompt 用户提示词
      * @return 执行结果
      */
+    //todo 添加流式响应
     public String run(String userPrompt) {
         if (this.state != AgentState.IDLE) {
             throw new RuntimeException("Cannot run agent from state " + this.state);
