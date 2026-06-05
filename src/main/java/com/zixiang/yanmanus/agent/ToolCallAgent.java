@@ -22,6 +22,7 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Scanner;
 import java.util.stream.Collectors;
 
 @EqualsAndHashCode(callSuper = true)
@@ -105,6 +106,9 @@ public class ToolCallAgent extends ReActAgent{
         if (!toolCallChatResponse.hasToolCalls()) {
             return "没有工具调用";
         }
+        // 调用工具之前判断是否调用了 askuser 如果模型调用了 ask_user，我们先把问题解析出来，准备展示给用户
+        String userQuestion = findAskUserQuestion();
+
         //调用工具
         Prompt prompt = new Prompt(getMessageList(), chatOptions);
         ToolExecutionResult toolExecutionResult = toolCallingManager.executeToolCalls(prompt, toolCallChatResponse);
@@ -116,6 +120,16 @@ public class ToolCallAgent extends ReActAgent{
                 .map(toolResponse -> String.format("工具：%s 完成了任务！结果是：%s", toolResponse.name(), toolResponse.responseData()))
                 .collect(Collectors.joining("\n"));
 
+        // 如果本轮是 ask_user，则暂停，真正从控制台读取用户输入
+        if (userQuestion != null) {
+            //todo 前端传用户的问题
+            System.out.println(userQuestion);
+            Scanner scanner = new Scanner(System.in);
+            String humanAnswer = scanner.nextLine();
+            // 用户回答作为新的 UserMessage 加入历史
+            this.getMessageList().add(new UserMessage(humanAnswer));
+        }
+
         //判断是否执行了终止工具
         boolean terminateCalled = toolResponseMessage.getResponses().stream()
                 .anyMatch(toolResponse -> toolResponse.name().equals("doTerminate"));
@@ -124,6 +138,24 @@ public class ToolCallAgent extends ReActAgent{
         }
         log.info(results);
         return results;
+    }
+
+    /**
+     *
+     * @return 询问的问题
+     */
+    private String findAskUserQuestion() {
+        AssistantMessage assistantMessage = this.toolCallChatResponse.getResult().getOutput();
+        for (AssistantMessage.ToolCall toolCall : assistantMessage.getToolCalls()) {
+            if ("askUser".equals(toolCall.name())) {
+                try {
+                    return toolCall.arguments();
+                } catch (Exception e) {
+                    return "请补充必要信息。";
+                }
+            }
+        }
+        return null;
     }
 
     @Override
