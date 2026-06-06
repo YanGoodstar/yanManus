@@ -1,5 +1,6 @@
 package com.zixiang.yanmanus.agent;
 
+import com.zixiang.yanmanus.agent.model.TaskLevel;
 import com.zixiang.yanmanus.prompt.AgentPrompts;
 import com.zixiang.yanmanus.prompt.PromptRenderer;
 import org.springframework.ai.chat.client.ChatClient;
@@ -18,10 +19,14 @@ public class YanManus extends ToolCallAgent{
 
     public YanManus(ToolCallback[] availableTools, ChatModel dashScopeChatModel) {
         super(availableTools);
+        this.setTaskLevel(TaskLevel.MODERATE);
         String systemPrompt =
                 PromptRenderer.render(AgentPrompts.SYSTEM_PROMPT, Map.of(
                         "agentName", "YanManus",
-                        "capabilities", "文件读写、网页搜索、命令行执行"
+                        "capabilities", "文件读写、网页搜索、命令行执行",
+                        "taskLevel", this.getTaskLevel().getDescription(),
+                        "maxAskCount", String.valueOf(this.getTaskLevel().getMaxAskCount()),
+                        "taskLevelGuidance", this.getTaskLevel().getGuidance()
                 ));
         this.setSystemPrompt(systemPrompt);
         this.setAgentName("YanManus");

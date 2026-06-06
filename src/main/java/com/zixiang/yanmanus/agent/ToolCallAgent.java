@@ -3,6 +3,8 @@ package com.zixiang.yanmanus.agent;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zixiang.yanmanus.agent.model.AgentState;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -13,13 +15,10 @@ import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
-import org.springframework.ai.chat.prompt.DefaultChatOptions;
-import org.springframework.ai.chat.prompt.DefaultChatOptionsBuilder;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.ai.tool.ToolCallback;
-import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Scanner;
@@ -29,6 +28,8 @@ import java.util.stream.Collectors;
 @Data
 @Slf4j
 public class ToolCallAgent extends ReActAgent{
+
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     //可用的工具
     private final ToolCallback[] availableTools;
@@ -106,8 +107,9 @@ public class ToolCallAgent extends ReActAgent{
         if (!toolCallChatResponse.hasToolCalls()) {
             return "没有工具调用";
         }
-        // 调用工具之前判断是否调用了 askuser 如果模型调用了 ask_user，我们先把问题解析出来，准备展示给用户
-        String userQuestion = findAskUserQuestion();
+
+        // 调用工具之前检查是否调用了 askUser，解析结构化参数
+        AskUserRequest askRequest = findAskUserRequest();
 
         //调用工具
         Prompt prompt = new Prompt(getMessageList(), chatOptions);
@@ -120,10 +122,29 @@ public class ToolCallAgent extends ReActAgent{
                 .map(toolResponse -> String.format("工具：%s 完成了任务！结果是：%s", toolResponse.name(), toolResponse.responseData()))
                 .collect(Collectors.joining("\n"));
 
-        // 如果本轮是 ask_user，则暂停，真正从控制台读取用户输入
-        if (userQuestion != null) {
+        // 处理 askUser 逻辑：计数、限流、blocking/default 处理
+        if (askRequest != null) {
+            setAskUserCount(getAskUserCount() + 1);
+            log.info("askUser 调用 #{}（上限 {}）", getAskUserCount(), getTaskLevel().getMaxAskCount());
+
+            if (getAskUserCount() > getTaskLevel().getMaxAskCount()) {
+                // 超出限制：不再询问，注入提示让模型自主决策
+                log.info("askUser 已达上限, 跳过询问");
+                this.getMessageList().add(new UserMessage(buildSkipMessage()));
+                return results;
+            }
+
+            // 未超限制：非阻塞且有默认值时直接使用默认值，不打断用户
+            if (!askRequest.blocking() && askRequest.defaultIfNotAnswered() != null
+                    && !askRequest.defaultIfNotAnswered().isBlank()) {
+                log.info("askUser 非阻塞且有默认值, 使用默认值: {}", askRequest.defaultIfNotAnswered());
+                this.getMessageList().add(new UserMessage(askRequest.defaultIfNotAnswered()));
+                return results;
+            }
+
+            // 阻塞时询问或无默认值：需要用户输入
             //todo 前端传用户的问题
-            System.out.println(userQuestion);
+            System.out.println(askRequest.question());
             Scanner scanner = new Scanner(System.in);
             String humanAnswer = scanner.nextLine();
             // 用户回答作为新的 UserMessage 加入历史
@@ -141,22 +162,37 @@ public class ToolCallAgent extends ReActAgent{
     }
 
     /**
-     *
-     * @return 询问的问题
+     * 从工具调用参数中解析 askUser 的结构化信息
+     * @return 询问请求，如果不是 askUser 调用则返回 null
      */
-    private String findAskUserQuestion() {
+    private AskUserRequest findAskUserRequest() {
         AssistantMessage assistantMessage = this.toolCallChatResponse.getResult().getOutput();
         for (AssistantMessage.ToolCall toolCall : assistantMessage.getToolCalls()) {
             if ("askUser".equals(toolCall.name())) {
                 try {
-                    return toolCall.arguments();
+                    JsonNode args = objectMapper.readTree(toolCall.arguments());
+                    String question = args.has("question") ? args.get("question").asText() : "请补充必要信息。";
+                    boolean blocking = args.has("blocking") && args.get("blocking").asBoolean(false);
+                    String defaultVal = args.has("defaultIfNotAnswered") ? args.get("defaultIfNotAnswered").asText(null) : null;
+                    return new AskUserRequest(question, blocking, defaultVal);
                 } catch (Exception e) {
-                    return "请补充必要信息。";
+                    return new AskUserRequest("请补充必要信息。", false, null);
                 }
             }
         }
         return null;
     }
+
+    private String buildSkipMessage() {
+        int max = getTaskLevel().getMaxAskCount();
+        return String.format(
+                "[系统提示] 询问用户次数已达上限(%d/%d)。你已使用了全部询问配额。"
+                + "请根据已有信息自主做出决策并继续执行任务，不要再次调用 askUser 工具。"
+                + "如果信息确实不足以完成任务，请直接调用 terminate 工具结束并说明原因。",
+                max, max);
+    }
+
+    private record AskUserRequest(String question, boolean blocking, String defaultIfNotAnswered) {}
 
     @Override
     protected void cleanup() {

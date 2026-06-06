@@ -11,7 +11,10 @@ import org.springframework.ai.tool.annotation.ToolParam;
  */
 public class AskUserTool {
 
-    @Tool(description = "Ask the user a question when uncertain. Use this when you need clarification or more information to proceed.",
+    @Tool(description = "Ask the user a question ONLY when you have exhausted all other options. " +
+            "Before using this tool, you must have already tried all available tools and approaches. " +
+            "Use this ONLY for truly critical missing information that prevents you from completing the task. " +
+            "Excessive use of this tool will degrade the user experience.",
     returnDirect = true)
     public String askUser(
             @ToolParam(description = "The question to ask the user") String question,

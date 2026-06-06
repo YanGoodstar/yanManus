@@ -2,6 +2,7 @@ package com.zixiang.yanmanus.agent;
 
 import cn.hutool.core.util.StrUtil;
 import com.zixiang.yanmanus.agent.model.AgentState;
+import com.zixiang.yanmanus.agent.model.TaskLevel;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -27,6 +28,10 @@ public abstract class BaseAgent {
     private int maxStep = 10;
     private int currentStep = 0;
 
+    //询问用户控制
+    private TaskLevel taskLevel = TaskLevel.MODERATE;
+    private int askUserCount = 0;
+
     //LLM
     private ChatClient chatClient;
 
@@ -47,6 +52,7 @@ public abstract class BaseAgent {
             throw new RuntimeException("User prompt cannot be empty");
         }
         //修改状态
+        setAskUserCount(0);
         this.state = AgentState.RUNNING;
         //记录消息上下文
         this.messageList.add(new UserMessage(userPrompt));
