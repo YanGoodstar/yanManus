@@ -1,6 +1,7 @@
 package com.zixiang.yanmanus.agent;
 
 import com.zixiang.yanmanus.agent.model.TaskLevel;
+import com.zixiang.yanmanus.memory.ChatSessionManager;
 import com.zixiang.yanmanus.prompt.AgentPrompts;
 import com.zixiang.yanmanus.prompt.PromptRenderer;
 import org.springframework.ai.chat.client.ChatClient;
@@ -17,8 +18,11 @@ import java.util.Map;
 @Component
 public class YanManus extends ToolCallAgent{
 
-    public YanManus(ToolCallback[] availableTools, ChatModel dashScopeChatModel) {
+    private final ChatSessionManager chatSessionManager;
+
+    public YanManus(ToolCallback[] availableTools, ChatModel dashScopeChatModel, ChatSessionManager chatSessionManager) {
         super(availableTools);
+        this.chatSessionManager = chatSessionManager;
         this.setTaskLevel(TaskLevel.MODERATE);
         String systemPrompt =
                 PromptRenderer.render(AgentPrompts.SYSTEM_PROMPT, Map.of(
@@ -37,6 +41,10 @@ public class YanManus extends ToolCallAgent{
                 .defaultAdvisors()
                 .build();
         setChatClient(chatClient);
+    }
+
+    public ChatSessionManager getChatSessionManager() {
+        return chatSessionManager;
     }
 
 }

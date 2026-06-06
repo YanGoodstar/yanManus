@@ -13,6 +13,6 @@ public class AgentTestRunner implements ApplicationRunner {
     YanManus yanManus;
     @Override
     public void run(ApplicationArguments args) {
-        yanManus.run("生成的文件放在哪了呢");
+//        yanManus.run("生成的文件放在哪了呢");
     }
 }

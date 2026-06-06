@@ -2,7 +2,9 @@ package com.zixiang.yanmanus.agent;
 
 import cn.hutool.core.util.StrUtil;
 import com.zixiang.yanmanus.agent.model.AgentState;
+import com.zixiang.yanmanus.agent.model.RunResult;
 import com.zixiang.yanmanus.agent.model.TaskLevel;
+import com.zixiang.yanmanus.memory.ChatSessionManager;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -35,52 +37,88 @@ public abstract class BaseAgent {
     //LLM
     private ChatClient chatClient;
 
-    //memory
-    private List<Message> messageList = new ArrayList<>();
+    //ThreadLocal 管理会话消息列表，支持 sessionId 隔离
+    private static final ThreadLocal<List<Message>> currentMessageList = new ThreadLocal<>();
+
+    //ThreadLocal 记录每步执行日志
+    private static final ThreadLocal<List<String>> currentStepLogs = new ThreadLocal<>();
+
+    protected static List<Message> getMessageList() {
+        List<Message> list = currentMessageList.get();
+        return list != null ? list : new ArrayList<>();
+    }
+
+    protected static void setMessageList(List<Message> messages) {
+        currentMessageList.set(messages);
+    }
 
     /**
      * 运行代理
      * @param userPrompt 用户提示词
-     * @return 执行结果
+     * @param sessionId  会话ID
+     * @param sessionManager 会话管理器
+     * @return 最终回复和步骤日志
      */
-    //todo 添加流式响应
-    public String run(String userPrompt) {
+    public RunResult run(String userPrompt, String sessionId, ChatSessionManager sessionManager) {
         if (this.state != AgentState.IDLE) {
             throw new RuntimeException("Cannot run agent from state " + this.state);
         }
         if (StrUtil.isBlank(userPrompt)){
             throw new RuntimeException("User prompt cannot be empty");
         }
-        //修改状态
         setAskUserCount(0);
         this.state = AgentState.RUNNING;
-        //记录消息上下文
-        this.messageList.add(new UserMessage(userPrompt));
-        List<String> results = new ArrayList<>();
+        //从 Redis/缓存 加载会话消息
+        List<Message> sessionMessages = sessionManager.getMessages(sessionId);
+        List<Message> messageList = new ArrayList<>(sessionMessages);
+        messageList.add(new UserMessage(userPrompt));
+        currentMessageList.set(messageList);
+        currentStepLogs.set(new ArrayList<>());
+
         try {
             for (int i = 0; i < this.maxStep && this.state != AgentState.FINISHED; i++) {
                 int stepNumber = i + 1;
                 currentStep = stepNumber;
                 log.info("Executing step {}/{}", stepNumber, maxStep);
-                //单步执行
                 String stepResult = this.step();
-                String result = "Step " + stepNumber + ": " + stepResult;
-                results.add(result);
+                log.info("Step {}: {}", stepNumber, stepResult);
+                currentStepLogs.get().add("Step " + stepNumber + ": " + stepResult);
+                //每步执行后持久化消息到 Redis
+                sessionManager.saveMessages(sessionId, getMessageList());
             }
-            //检查是否超出步骤限制
             if (currentStep >= maxStep) {
                 state = AgentState.FINISHED;
-                results.add("Terminated: Reached max steps (" + maxStep + ")");
+                log.warn("Terminated: Reached max steps ({})", maxStep);
             }
-            return String.join("\n", results);
+            //最终持久化
+            sessionManager.saveMessages(sessionId, getMessageList());
+            String finalResult = extractLastAssistantText();
+            return new RunResult(finalResult, currentStepLogs.get());
         } catch (Exception e) {
             state = AgentState.ERROR;
             log.error("Error executing agent: " + e.getMessage(), e);
-            return "执行错误" + e.getMessage();
+            return new RunResult("执行错误" + e.getMessage(), currentStepLogs.get());
         } finally {
-            //清理资源
             this.cleanup();
+            currentMessageList.remove();
+            currentStepLogs.remove();
         }
+    }
+
+    /**
+     * 从消息列表中提取最后一条 AssistantMessage 的文本作为最终回复
+     */
+    private String extractLastAssistantText() {
+        List<Message> messages = getMessageList();
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            Message msg = messages.get(i);
+            if (msg instanceof org.springframework.ai.chat.messages.AssistantMessage assistant) {
+                if (assistant.getText() != null && !assistant.getText().isBlank()) {
+                    return assistant.getText();
+                }
+            }
+        }
+        return "任务已完成";
     }
 
     protected abstract void cleanup();

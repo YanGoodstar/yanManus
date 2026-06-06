@@ -69,6 +69,11 @@
             <version>1.1.6</version>
             <scope>compile</scope>
         </dependency>
+        <!-- Redis -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
         <!--        生成对应的接口文档-->
         <dependency>
             <groupId>com.github.xiaoymin</groupId>
