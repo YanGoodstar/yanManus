@@ -111,54 +111,76 @@ public class ToolCallAgent extends ReActAgent{
         // 调用工具之前检查是否调用了 askUser，解析结构化参数
         AskUserRequest askRequest = findAskUserRequest();
 
-        //调用工具
+        String results = executeToolCalls();
+        log.info(results);
+        // 处理 askUser 逻辑：计数、限流、blocking/default 处理
+        if (askRequest != null) {
+            handleAskUser(askRequest);
+        }
+
+        checkTerminate();
+        return results;
+    }
+
+    /**
+     * 执行所有工具调用并返回结果摘要
+     */
+    private String executeToolCalls() {
         Prompt prompt = new Prompt(getMessageList(), chatOptions);
         ToolExecutionResult toolExecutionResult = toolCallingManager.executeToolCalls(prompt, toolCallChatResponse);
         //记录消息上下文 调用工具之后 conversationHistory包含了助手消息和调用工具信息
         setMessageList(toolExecutionResult.conversationHistory());
 
+        //返回的 conversationHistory() 是完整的对话历史（包含所有之前的 user/assistant/tool 消息）
+        //在工具执行的语境下，最后一轮追加的消息就是工具响应，所以是正确的取法
         ToolResponseMessage toolResponseMessage = (ToolResponseMessage) CollUtil.getLast(toolExecutionResult.conversationHistory());
-        String results = toolResponseMessage.getResponses().stream()
+        return toolResponseMessage.getResponses().stream()
                 .map(toolResponse -> String.format("工具：%s 完成了任务！结果是：%s", toolResponse.name(), toolResponse.responseData()))
                 .collect(Collectors.joining("\n"));
+    }
 
-        // 处理 askUser 逻辑：计数、限流、blocking/default 处理
-        if (askRequest != null) {
-            setAskUserCount(getAskUserCount() + 1);
-            log.info("askUser 调用 #{}（上限 {}）", getAskUserCount(), getTaskLevel().getMaxAskCount());
+    /**
+     * 处理 askUser 逻辑：计数、限流、blocking/default 处理
+     */
+    private void handleAskUser(AskUserRequest askRequest) {
+        setAskUserCount(getAskUserCount() + 1);
+        log.info("askUser 调用 #{}（上限 {}）", getAskUserCount(), getTaskLevel().getMaxAskCount());
 
-            if (getAskUserCount() > getTaskLevel().getMaxAskCount()) {
-                // 超出限制：不再询问，注入提示让模型自主决策
-                log.info("askUser 已达上限, 跳过询问");
-                this.getMessageList().add(new UserMessage(buildSkipMessage()));
-                return results;
-            }
-
-            // 未超限制：非阻塞且有默认值时直接使用默认值，不打断用户
-            if (!askRequest.blocking() && askRequest.defaultIfNotAnswered() != null
-                    && !askRequest.defaultIfNotAnswered().isBlank()) {
-                log.info("askUser 非阻塞且有默认值, 使用默认值: {}", askRequest.defaultIfNotAnswered());
-                this.getMessageList().add(new UserMessage(askRequest.defaultIfNotAnswered()));
-                return results;
-            }
-
-            // 阻塞时询问或无默认值：需要用户输入
-            //todo 前端传用户的问题
-            System.out.println(askRequest.question());
-            Scanner scanner = new Scanner(System.in);
-            String humanAnswer = scanner.nextLine();
-            // 用户回答作为新的 UserMessage 加入历史
-            this.getMessageList().add(new UserMessage(humanAnswer));
+        if (getAskUserCount() > getTaskLevel().getMaxAskCount()) {
+            log.info("askUser 已达上限, 跳过询问");
+            this.getMessageList().add(new UserMessage(buildSkipMessage()));
+            return;
         }
 
-        //判断是否执行了终止工具
-        boolean terminateCalled = toolResponseMessage.getResponses().stream()
-                .anyMatch(toolResponse -> toolResponse.name().equals("doTerminate"));
-        if (terminateCalled){
-            setState(AgentState.FINISHED);
+        // 非阻塞且有默认值时直接使用默认值，不打断用户
+        if (!askRequest.blocking() && askRequest.defaultIfNotAnswered() != null
+                && !askRequest.defaultIfNotAnswered().isBlank()) {
+            log.info("askUser 非阻塞且有默认值, 使用默认值: {}", askRequest.defaultIfNotAnswered());
+            this.getMessageList().add(new UserMessage(askRequest.defaultIfNotAnswered()));
+            return;
         }
-        log.info(results);
-        return results;
+
+        // 阻塞式询问或无默认值：需要用户输入
+        //todo 前端传用户的问题
+        System.out.println(askRequest.question());
+        Scanner scanner = new Scanner(System.in);
+        String humanAnswer = scanner.nextLine();
+        this.getMessageList().add(new UserMessage(humanAnswer));
+    }
+
+    /**
+     * 检查是否执行了终止工具
+     */
+    private void checkTerminate() {
+        List<Message> messageList = getMessageList();
+        Message lastMessage = messageList.getLast();
+        if (lastMessage instanceof ToolResponseMessage msg) {
+            boolean terminateCalled = msg.getResponses().stream()
+                    .anyMatch(toolResponse -> toolResponse.name().equals("doTerminate"));
+            if (terminateCalled) {
+                setState(AgentState.FINISHED);
+            }
+        }
     }
 
     /**
