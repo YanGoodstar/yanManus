@@ -4,9 +4,11 @@ import com.zixiang.yanmanus.agent.model.TaskLevel;
 import com.zixiang.yanmanus.memory.ChatSessionManager;
 import com.zixiang.yanmanus.prompt.AgentPrompts;
 import com.zixiang.yanmanus.prompt.PromptRenderer;
+import lombok.Getter;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -15,12 +17,13 @@ import java.util.Map;
  * @author yan
  * @create 2026-05-26-20:13
  */
+@Getter
 @Component
 public class YanManus extends ToolCallAgent{
 
     private final ChatSessionManager chatSessionManager;
 
-    public YanManus(ToolCallback[] availableTools, ChatModel dashScopeChatModel, ChatSessionManager chatSessionManager) {
+    public YanManus(@Qualifier("yanManusToolCallbacks") ToolCallback[] availableTools, ChatModel dashScopeChatModel, ChatSessionManager chatSessionManager) {
         super(availableTools);
         this.chatSessionManager = chatSessionManager;
         this.setTaskLevel(TaskLevel.MODERATE);
@@ -41,10 +44,6 @@ public class YanManus extends ToolCallAgent{
                 .defaultAdvisors()
                 .build();
         setChatClient(chatClient);
-    }
-
-    public ChatSessionManager getChatSessionManager() {
-        return chatSessionManager;
     }
 
 }

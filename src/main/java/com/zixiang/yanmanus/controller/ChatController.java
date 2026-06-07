@@ -1,5 +1,6 @@
 package com.zixiang.yanmanus.controller;
 
+import com.zixiang.yanmanus.agent.PlanningAgent;
 import com.zixiang.yanmanus.agent.YanManus;
 import com.zixiang.yanmanus.agent.model.AgentState;
 import com.zixiang.yanmanus.agent.model.RunResult;
@@ -20,14 +21,16 @@ import java.util.UUID;
 public class ChatController {
 
     private final YanManus yanManus;
+    private final PlanningAgent planningAgent;
     private final ChatSessionManager sessionManager;
 
-    public ChatController(YanManus yanManus, ChatSessionManager sessionManager) {
+    public ChatController(YanManus yanManus, PlanningAgent planningAgent, ChatSessionManager sessionManager) {
         this.yanManus = yanManus;
+        this.planningAgent = planningAgent;
         this.sessionManager = sessionManager;
     }
 
-    @Operation(summary = "发送消息", description = "发送消息给智能体，支持多轮对话")
+    @Operation(summary = "发送消息（快速响应）", description = "使用 YanManus 快速响应，仅网页搜索")
     @PostMapping("/send")
     public Map<String, Object> send(
             @Parameter(description = "会话ID，为空则创建新会话")
@@ -37,11 +40,31 @@ public class ChatController {
         if (sessionId == null || sessionId.isBlank()) {
             sessionId = UUID.randomUUID().toString();
         }
-        //重置 agent 状态，确保可以重新运行
         yanManus.setState(AgentState.IDLE);
         RunResult runResult = yanManus.run(message, sessionId, yanManus.getChatSessionManager());
         return Map.of(
                 "sessionId", sessionId,
+                "agent", "YanManus",
+                "result", runResult.result(),
+                "steps", runResult.steps()
+        );
+    }
+
+    @Operation(summary = "发送消息（深度思考）", description = "使用 PlanningAgent 深度思考，使用所有工具")
+    @PostMapping("/send/planning")
+    public Map<String, Object> sendPlanning(
+            @Parameter(description = "会话ID，为空则创建新会话")
+            @RequestParam(required = false) String sessionId,
+            @Parameter(description = "用户消息", required = true)
+            @RequestParam String message) {
+        if (sessionId == null || sessionId.isBlank()) {
+            sessionId = UUID.randomUUID().toString();
+        }
+        planningAgent.setState(AgentState.IDLE);
+        RunResult runResult = planningAgent.run(message, sessionId, planningAgent.getChatSessionManager());
+        return Map.of(
+                "sessionId", sessionId,
+                "agent", "PlanningAgent",
                 "result", runResult.result(),
                 "steps", runResult.steps()
         );

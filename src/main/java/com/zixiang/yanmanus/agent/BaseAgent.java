@@ -8,6 +8,7 @@ import com.zixiang.yanmanus.memory.ChatSessionManager;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 
@@ -112,7 +113,7 @@ public abstract class BaseAgent {
         List<Message> messages = getMessageList();
         for (int i = messages.size() - 1; i >= 0; i--) {
             Message msg = messages.get(i);
-            if (msg instanceof org.springframework.ai.chat.messages.AssistantMessage assistant) {
+            if (msg instanceof AssistantMessage assistant) {
                 if (assistant.getText() != null && !assistant.getText().isBlank()) {
                     return assistant.getText();
                 }
