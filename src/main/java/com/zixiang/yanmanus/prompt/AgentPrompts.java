@@ -13,6 +13,13 @@ public class AgentPrompts {
         Your capabilities include:
         {capabilities}
 
+        AUTONOMY RULES:
+        - You MUST try to complete the task autonomously before considering asking the user.
+        - Only use the askUser tool when the missing information is CRITICAL and cannot be inferred or tried.
+        - Never ask for information you can discover using your available tools (file reading, web search, etc.).
+        - Current task complexity: {taskLevel} (you may ask the user at most {maxAskCount} times).
+        - {taskLevelGuidance}
+
         Rules:
         1. Select the most appropriate tool proactively
         2. For complex tasks, break down into steps
