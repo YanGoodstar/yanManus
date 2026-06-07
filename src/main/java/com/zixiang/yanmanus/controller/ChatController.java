@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.Map;
@@ -50,6 +51,20 @@ public class ChatController {
         );
     }
 
+    @Operation(summary = "流式发送消息（快速响应）", description = "使用 YanManus 流式输出，仅网页搜索")
+    @GetMapping("/send/stream")
+    public SseEmitter sendStream(
+            @Parameter(description = "会话ID，为空则创建新会话")
+            @RequestParam(required = false) String sessionId,
+            @Parameter(description = "用户消息", required = true)
+            @RequestParam String message) {
+        if (sessionId == null || sessionId.isBlank()) {
+            sessionId = UUID.randomUUID().toString();
+        }
+        yanManus.setState(AgentState.IDLE);
+        return yanManus.runWithSse(message, sessionId, yanManus.getChatSessionManager());
+    }
+
     @Operation(summary = "发送消息（深度思考）", description = "使用 PlanningAgent 深度思考，使用所有工具")
     @PostMapping("/send/planning")
     public Map<String, Object> sendPlanning(
@@ -68,6 +83,20 @@ public class ChatController {
                 "result", runResult.result(),
                 "steps", runResult.steps()
         );
+    }
+
+    @Operation(summary = "流式发送消息（深度思考）", description = "使用 PlanningAgent 流式输出，深度思考")
+    @GetMapping("/send/planning/stream")
+    public SseEmitter sendPlanningStream(
+            @Parameter(description = "会话ID，为空则创建新会话")
+            @RequestParam(required = false) String sessionId,
+            @Parameter(description = "用户消息", required = true)
+            @RequestParam String message) {
+        if (sessionId == null || sessionId.isBlank()) {
+            sessionId = UUID.randomUUID().toString();
+        }
+        planningAgent.setState(AgentState.IDLE);
+        return planningAgent.runWithSse(message, sessionId, planningAgent.getChatSessionManager());
     }
 
     @Operation(summary = "获取会话历史")
