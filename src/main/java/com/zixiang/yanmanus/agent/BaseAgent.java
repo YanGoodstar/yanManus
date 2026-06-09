@@ -59,11 +59,12 @@ public abstract class BaseAgent {
     /**
      * 运行代理
      * @param userPrompt 用户提示词
+     * @param userId     用户ID
      * @param sessionId  会话ID
      * @param sessionManager 会话管理器
      * @return 最终回复和步骤日志
      */
-    public RunResult run(String userPrompt, String sessionId, ChatSessionManager sessionManager) {
+    public RunResult run(String userPrompt, Long userId, String sessionId, ChatSessionManager sessionManager) {
         if (this.state != AgentState.IDLE) {
             throw new RuntimeException("Cannot run agent from state " + this.state);
         }
@@ -73,7 +74,7 @@ public abstract class BaseAgent {
         setAskUserCount(0);
         this.state = AgentState.RUNNING;
         //从 Redis/缓存 加载会话消息
-        List<Message> sessionMessages = sessionManager.getMessages(sessionId);
+        List<Message> sessionMessages = sessionManager.getMessages(userId, sessionId);
         List<Message> messageList = new ArrayList<>(sessionMessages);
         messageList.add(new UserMessage(userPrompt));
         currentMessageList.set(messageList);
@@ -88,14 +89,14 @@ public abstract class BaseAgent {
                 log.info("Step {}: {}", stepNumber, stepResult);
                 currentStepLogs.get().add("Step " + stepNumber + ": " + stepResult);
                 //每步执行后持久化消息到 Redis
-                sessionManager.saveMessages(sessionId, getMessageList());
+                sessionManager.saveMessages(userId, sessionId, getMessageList());
             }
             if (currentStep >= maxStep) {
                 state = AgentState.FINISHED;
                 log.warn("Terminated: Reached max steps ({})", maxStep);
             }
             //最终持久化
-            sessionManager.saveMessages(sessionId, getMessageList());
+            sessionManager.saveMessages(userId, sessionId, getMessageList());
             String finalResult = extractLastAssistantText();
             return new RunResult(finalResult, currentStepLogs.get());
         } catch (Exception e) {
@@ -114,11 +115,12 @@ public abstract class BaseAgent {
      * 运行代理
      * 流式输出
      * @param userPrompt 用户提示词
+     * @param userId     用户ID
      * @param sessionId  会话ID
      * @param sessionManager 会话管理器
      * @return 最终回复和步骤日志
      */
-    public SseEmitter runWithSse(String userPrompt, String sessionId, ChatSessionManager sessionManager) {
+    public SseEmitter runWithSse(String userPrompt, Long userId, String sessionId, ChatSessionManager sessionManager) {
         SseEmitter sseEmitter = new SseEmitter(5 * 60 * 1000L);
 
         CompletableFuture.runAsync(() -> {
@@ -137,7 +139,7 @@ public abstract class BaseAgent {
             setAskUserCount(0);
             this.state = AgentState.RUNNING;
             //从 Redis/缓存 加载会话消息
-            List<Message> sessionMessages = sessionManager.getMessages(sessionId);
+            List<Message> sessionMessages = sessionManager.getMessages(userId, sessionId);
             List<Message> messageList = new ArrayList<>(sessionMessages);
             messageList.add(new UserMessage(userPrompt));
             currentMessageList.set(messageList);
@@ -152,7 +154,7 @@ public abstract class BaseAgent {
                     log.info("Step {}: {}", stepNumber, stepResult);
                     currentStepLogs.get().add("Step " + stepNumber + ": " + stepResult);
                     //每步执行后持久化消息到 Redis
-                    sessionManager.saveMessages(sessionId, getMessageList());
+                    sessionManager.saveMessages(userId, sessionId, getMessageList());
                     sseEmitter.send(stepResult);
                 }
                 if (currentStep >= maxStep) {
@@ -161,7 +163,7 @@ public abstract class BaseAgent {
                     sseEmitter.send("执行结束，步骤达到最大步骤");
                 }
                 //最终持久化
-                sessionManager.saveMessages(sessionId, getMessageList());
+                sessionManager.saveMessages(userId, sessionId, getMessageList());
                 String finalResult = extractLastAssistantText();
                 sseEmitter.send(finalResult);
                 sseEmitter.complete();

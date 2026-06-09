@@ -5,10 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.databind.jsontype.PolymorphicTypeValidator;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.ToolResponseMessage;
-import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -41,50 +38,54 @@ public class ChatSessionManager {
         this.objectMapper.activateDefaultTyping(ptv, ObjectMapper.DefaultTyping.OBJECT_AND_NON_CONCRETE);
     }
 
-    public List<Message> getMessages(String sessionId) {
-        return localCache.computeIfAbsent(sessionId, this::loadFromRedis);
+    public List<Message> getMessages(Long userId, String sessionId) {
+        String cacheKey = buildCacheKey(userId, sessionId);
+        return localCache.computeIfAbsent(cacheKey, k -> loadFromRedis(userId, sessionId));
     }
 
-    public void saveMessages(String sessionId, List<Message> messages) {
+    public void saveMessages(Long userId, String sessionId, List<Message> messages) {
         List<Message> trimmed = trimMessages(messages);
-        localCache.put(sessionId, new ArrayList<>(trimmed));
-        saveToRedis(sessionId, trimmed);
+        String cacheKey = buildCacheKey(userId, sessionId);
+        localCache.put(cacheKey, new ArrayList<>(trimmed));
+        saveToRedis(userId, sessionId, trimmed);
     }
 
-    public void clearSession(String sessionId) {
-        localCache.remove(sessionId);
-        redisTemplate.delete(KEY_PREFIX + sessionId);
+    public void clearSession(Long userId, String sessionId) {
+        String cacheKey = buildCacheKey(userId, sessionId);
+        localCache.remove(cacheKey);
+        redisTemplate.delete(buildRedisKey(userId, sessionId));
     }
 
-    public boolean sessionExists(String sessionId) {
-        if (localCache.containsKey(sessionId)) {
+    public boolean sessionExists(Long userId, String sessionId) {
+        String cacheKey = buildCacheKey(userId, sessionId);
+        if (localCache.containsKey(cacheKey)) {
             return true;
         }
-        return redisTemplate.hasKey(KEY_PREFIX + sessionId);
+        return redisTemplate.hasKey(buildRedisKey(userId, sessionId));
     }
 
-    private List<Message> loadFromRedis(String sessionId) {
+    private List<Message> loadFromRedis(Long userId, String sessionId) {
         try {
-            String json = redisTemplate.opsForValue().get(KEY_PREFIX + sessionId);
+            String json = redisTemplate.opsForValue().get(buildRedisKey(userId, sessionId));
             if (json == null) {
                 return new ArrayList<>();
             }
             List<Message> messages = objectMapper.readValue(json,
                     objectMapper.getTypeFactory().constructCollectionType(List.class, Message.class));
-            log.info("从 Redis 加载会话 {} 的 {} 条消息", sessionId, messages.size());
+            log.info("从 Redis 加载用户 {} 会话 {} 的 {} 条消息", userId, sessionId, messages.size());
             return new ArrayList<>(messages);
         } catch (JsonProcessingException e) {
-            log.error("反序列化会话消息失败, sessionId={}", sessionId, e);
+            log.error("反序列化会话消息失败, userId={}, sessionId={}", userId, sessionId, e);
             return new ArrayList<>();
         }
     }
 
-    private void saveToRedis(String sessionId, List<Message> messages) {
+    private void saveToRedis(Long userId, String sessionId, List<Message> messages) {
         try {
             String json = objectMapper.writeValueAsString(messages);
-            redisTemplate.opsForValue().set(KEY_PREFIX + sessionId, json, TTL_HOURS, TimeUnit.HOURS);
+            redisTemplate.opsForValue().set(buildRedisKey(userId, sessionId), json, TTL_HOURS, TimeUnit.HOURS);
         } catch (JsonProcessingException e) {
-            log.error("序列化会话消息失败, sessionId={}", sessionId, e);
+            log.error("序列化会话消息失败, userId={}, sessionId={}", userId, sessionId, e);
         }
     }
 
@@ -94,5 +95,13 @@ public class ChatSessionManager {
         }
         log.info("消息数量 {} 超过上限 {}，截断早期消息", messages.size(), MAX_MESSAGES);
         return new ArrayList<>(messages.subList(messages.size() - MAX_MESSAGES, messages.size()));
+    }
+
+    private String buildRedisKey(Long userId, String sessionId) {
+        return KEY_PREFIX + userId + ":" + sessionId;
+    }
+
+    private String buildCacheKey(Long userId, String sessionId) {
+        return userId + ":" + sessionId;
     }
 }
