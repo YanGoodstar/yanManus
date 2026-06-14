@@ -18,14 +18,15 @@ import java.util.Map;
  * @create 2026-05-26-20:13
  */
 @Getter
-@Component
 public class YanManus extends ToolCallAgent{
 
-    private final ChatSessionManager chatSessionManager;
-
-    public YanManus(@Qualifier("yanManusToolCallbacks") ToolCallback[] availableTools, ChatModel dashScopeChatModel, ChatSessionManager chatSessionManager) {
-        super(availableTools);
-        this.chatSessionManager = chatSessionManager;
+    public YanManus(ToolCallback[] availableTools,
+                    ChatModel dashScopeChatModel,
+                    ChatSessionManager chatSessionManager,
+                    Long userId,
+                    String sessionId) {
+        super(availableTools, userId, sessionId);
+        setChatSessionManager(chatSessionManager);
         this.setTaskLevel(TaskLevel.MODERATE);
         String systemPrompt =
                 PromptRenderer.render(AgentPrompts.SYSTEM_PROMPT, Map.of(

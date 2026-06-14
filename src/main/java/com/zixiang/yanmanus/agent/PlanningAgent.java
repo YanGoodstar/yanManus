@@ -15,13 +15,16 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 
 @Getter
-@Component
 public class PlanningAgent extends ToolCallAgent {
 
     private final ChatSessionManager chatSessionManager;
 
-    public PlanningAgent(@Qualifier("allToolCallbacks") ToolCallback[] availableTools, ChatModel dashScopeChatModel, ChatSessionManager chatSessionManager) {
-        super(availableTools);
+    public PlanningAgent(ToolCallback[] availableTools,
+                         ChatModel dashScopeChatModel,
+                         ChatSessionManager chatSessionManager,
+                         Long userId,
+                         String sessionId) {
+        super(availableTools, userId, sessionId);
         this.chatSessionManager = chatSessionManager;
         this.setTaskLevel(TaskLevel.COMPLEX);
         this.setSystemPrompt(PlanningPrompts.SYSTEM_PROMPT);

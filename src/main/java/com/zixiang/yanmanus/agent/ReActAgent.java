@@ -1,9 +1,15 @@
 package com.zixiang.yanmanus.agent;
 
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public abstract class ReActAgent extends BaseAgent{
+
+    public ReActAgent(Long userId, String sessionId) {
+        super(userId, sessionId);
+    }
+
     /**
      *
      * @return 是否执行行动，true需要，false不需要

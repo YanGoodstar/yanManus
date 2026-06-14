@@ -8,6 +8,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zixiang.yanmanus.agent.model.AgentState;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -25,7 +27,8 @@ import java.util.Scanner;
 import java.util.stream.Collectors;
 
 @EqualsAndHashCode(callSuper = true)
-@Data
+@Setter
+@Getter
 @Slf4j
 public class ToolCallAgent extends ReActAgent{
 
@@ -43,8 +46,8 @@ public class ToolCallAgent extends ReActAgent{
     //聊天选项 禁用内置的工具调用机制，自己维护上下文
     private final ChatOptions chatOptions;
 
-    public ToolCallAgent(ToolCallback[] availableTools) {
-        super();
+    public ToolCallAgent(ToolCallback[] availableTools, Long userId, String sessionId) {
+        super(userId, sessionId);
         this.availableTools = availableTools;
         this.toolCallingManager = ToolCallingManager.builder().build();
         this.chatOptions = DashScopeChatOptions.builder()

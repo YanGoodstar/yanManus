@@ -9,8 +9,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class AgentTestRunner implements ApplicationRunner {
 
-    @Autowired
-    YanManus yanManus;
     @Override
     public void run(ApplicationArguments args) {
 //        yanManus.run("生成的文件放在哪了呢");
