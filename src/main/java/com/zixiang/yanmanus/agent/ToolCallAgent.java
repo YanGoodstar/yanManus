@@ -121,7 +121,6 @@ public class ToolCallAgent extends ReActAgent{
             handleAskUser(askRequest);
         }
 
-        checkTerminate();
         return results;
     }
 
@@ -134,6 +133,14 @@ public class ToolCallAgent extends ReActAgent{
         //记录消息上下文 调用工具之后 conversationHistory包含了助手消息和调用工具信息
         setMessageList(toolExecutionResult.conversationHistory());
 
+        //如果执行的是终止工具则将状态修改为完成，并返回结果
+        if (checkTerminate()) {
+            setState(AgentState.FINISHED);
+            Message result = getMessageList().stream()
+                    .filter(message -> message instanceof AssistantMessage)
+                    .toList().getLast();
+            return result.getText();
+        }
         //返回的 conversationHistory() 是完整的对话历史（包含所有之前的 user/assistant/tool 消息）
         //在工具执行的语境下，最后一轮追加的消息就是工具响应，所以是正确的取法
         ToolResponseMessage toolResponseMessage = (ToolResponseMessage) CollUtil.getLast(toolExecutionResult.conversationHistory());
@@ -174,16 +181,14 @@ public class ToolCallAgent extends ReActAgent{
     /**
      * 检查是否执行了终止工具
      */
-    private void checkTerminate() {
+    private boolean checkTerminate() {
         List<Message> messageList = getMessageList();
         Message lastMessage = messageList.getLast();
         if (lastMessage instanceof ToolResponseMessage msg) {
-            boolean terminateCalled = msg.getResponses().stream()
+            return msg.getResponses().stream()
                     .anyMatch(toolResponse -> toolResponse.name().equals("doTerminate"));
-            if (terminateCalled) {
-                setState(AgentState.FINISHED);
-            }
         }
+        return false;
     }
 
     /**

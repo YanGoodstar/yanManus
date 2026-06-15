@@ -61,20 +61,19 @@ public abstract class BaseAgent {
         SseEmitter sseEmitter = new SseEmitter(5 * 60 * 1000L);
 
         CompletableFuture.runAsync(() -> {
-
+            setAskUserCount(0);
+            this.state = AgentState.RUNNING;
             try {
-                if (this.state != AgentState.IDLE) {
-                    sseEmitter.send("Cannot run agent from state " + this.state);
-                }
                 if (StrUtil.isBlank(userPrompt)){
                     sseEmitter.send("User prompt cannot be empty");
+                    sseEmitter.complete();
+                    return;
                 }
             } catch (IOException e) {
                 sseEmitter.completeWithError(e);
                 return;
             }
-            setAskUserCount(0);
-            this.state = AgentState.RUNNING;
+
             //从 Redis/缓存 加载会话消息
             List<Message> sessionMessages = getChatSessionManager().getMessages(userId, sessionId);
             List<Message> messageList = new ArrayList<>(sessionMessages);
@@ -103,6 +102,11 @@ public abstract class BaseAgent {
             } catch (Exception e) {
                 state = AgentState.ERROR;
                 log.error("Error executing agent: " + e.getMessage(), e);
+                try {
+                    sseEmitter.send("执行失败：" + e.getMessage());
+                } catch (IOException ignored) {
+                }
+                sseEmitter.completeWithError(e);
             } finally {
                 this.cleanup();
             }
@@ -114,12 +118,7 @@ public abstract class BaseAgent {
             this.cleanup();
         });
 
-        sseEmitter.onCompletion(() -> {
-            if (this.state != AgentState.RUNNING) {
-                this.state = AgentState.FINISHED;
-            }
-            this.cleanup();
-        });
+        sseEmitter.onCompletion(this::cleanup);
         return sseEmitter;
     }
 
