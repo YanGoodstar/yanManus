@@ -17,15 +17,13 @@ import java.util.Map;
 @Getter
 public class PlanningAgent extends ToolCallAgent {
 
-    private final ChatSessionManager chatSessionManager;
-
     public PlanningAgent(ToolCallback[] availableTools,
                          ChatModel dashScopeChatModel,
                          ChatSessionManager chatSessionManager,
                          Long userId,
                          String sessionId) {
         super(availableTools, userId, sessionId);
-        this.chatSessionManager = chatSessionManager;
+        setChatSessionManager(chatSessionManager);
         this.setTaskLevel(TaskLevel.COMPLEX);
         this.setSystemPrompt(PlanningPrompts.SYSTEM_PROMPT);
         this.setAgentName("PlanningAgent");
